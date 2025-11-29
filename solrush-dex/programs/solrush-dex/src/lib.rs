@@ -4,98 +4,24 @@ use anchor_spl::{
     token::{Token, TokenAccount, Mint, MintTo, mint_to, Transfer, transfer, Burn, burn},
 };
 
+// Module declarations
+mod state;
+mod errors;
+mod utils;
+
+// Import state structures and types
+use state::{LiquidityPool, UserLiquidityPosition, LimitOrder, OrderStatus};
+
+// Import error types
+use errors::CustomError;
+
 declare_id!("3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT");
 
 // ============================================================================
 // STATE STRUCTURES (Module 2.1 - Refactored)
 // ============================================================================
-
-/// LiquidityPool Account Structure
-/// Represents a single trading pair pool (SOL/USDC or SOL/USDT)
-///
-/// Space: 8 (discriminator) + 32*6 + 8*5 + 1 = 249 bytes
-#[account]
-pub struct LiquidityPool {
-    // Authority and Token Configuration (192 bytes)
-    pub authority: Pubkey,           // Pool creator/admin (32 bytes)
-    pub token_a_mint: Pubkey,        // SOL mint address (32 bytes)
-    pub token_b_mint: Pubkey,        // USDC or USDT mint address (32 bytes)
-    pub token_a_vault: Pubkey,       // Vault holding SOL tokens (32 bytes)
-    pub token_b_vault: Pubkey,       // Vault holding USDC/USDT tokens (32 bytes)
-    pub lp_token_mint: Pubkey,       // LP token mint address (32 bytes)
-    
-    // Pool State (24 bytes)
-    pub reserve_a: u64,              // Current SOL reserve in pool (8 bytes)
-    pub reserve_b: u64,              // Current USDC/USDT reserve in pool (8 bytes)
-    pub total_lp_supply: u64,        // Total LP tokens in circulation (8 bytes)
-    
-    // Fee Configuration (16 bytes)
-    pub fee_numerator: u64,          // Fee numerator = 3 for 0.3% (8 bytes)
-    pub fee_denominator: u64,        // Fee denominator = 1000 (8 bytes)
-    
-    // PDA Verification (1 byte)
-    pub bump: u8,                    // PDA bump seed (1 byte)
-}
-
-impl LiquidityPool {
-    pub const SIZE: usize = 8 + 32*6 + 8*5 + 1;
-}
-
-/// UserLiquidityPosition Account Structure
-/// Tracks individual user's LP token position and rewards
-///
-/// Space: 8 (discriminator) + 32*2 + 8*4 + 1 = 113 bytes
-#[account]
-pub struct UserLiquidityPosition {
-    pub owner: Pubkey,               // User wallet address (32 bytes)
-    pub pool: Pubkey,                // Associated pool account (32 bytes)
-    pub lp_tokens: u64,              // LP tokens owned by user (8 bytes)
-    pub deposit_timestamp: i64,      // When the LP position was created (8 bytes)
-    pub last_claim_timestamp: i64,   // Last RUSH reward claim timestamp (8 bytes)
-    pub total_rush_claimed: u64,     // Total RUSH tokens claimed (8 bytes)
-    pub bump: u8,                    // PDA bump seed (1 byte)
-}
-
-impl UserLiquidityPosition {
-    pub const SIZE: usize = 8 + 32*2 + 8*4 + 1;
-}
-
-// ============================================================================
-// CUSTOM ERRORS (Module 2.2)
-// ============================================================================
-
-#[error_code]
-pub enum CustomError {
-    #[msg("Initial deposits must be greater than zero")]
-    InvalidInitialDeposit,
-    
-    #[msg("Insufficient liquidity in pool")]
-    InsufficientLiquidity,
-    
-    #[msg("Slippage tolerance exceeded")]
-    SlippageTooHigh,
-    
-    #[msg("Invalid fee parameters")]
-    InvalidFeeParameters,
-    
-    #[msg("Overflow detected in calculation")]
-    CalculationOverflow,
-    
-    #[msg("Pool ratio imbalance exceeds tolerance")]
-    RatioImbalance,
-    
-    #[msg("Insufficient user token balance")]
-    InsufficientBalance,
-    
-    #[msg("Insufficient LP token balance")]
-    InsufficientLPBalance,
-    
-    #[msg("Invalid amount: must be greater than zero")]
-    InvalidAmount,
-    
-    #[msg("Insufficient pool reserves")]
-    InsufficientPoolReserves,
-}
+// NOTE: LiquidityPool and UserLiquidityPosition are defined in state/mod.rs
+// Re-exported above for convenience
 
 // ============================================================================
 // EVENTS (Module 2.2, 2.3, 2.4)
@@ -148,6 +74,45 @@ pub struct SwapExecuted {
     pub is_a_to_b: bool,
     pub new_reserve_a: u64,
     pub new_reserve_b: u64,
+}
+
+// ============================================================================
+// EVENTS (Module 3.4: Limit Orders)
+// ============================================================================
+
+/// Event emitted when a limit order is created (Module 3.4)
+#[event]
+pub struct LimitOrderCreated {
+    pub order: Pubkey,
+    pub owner: Pubkey,
+    pub pool: Pubkey,
+    pub sell_token: Pubkey,
+    pub buy_token: Pubkey,
+    pub sell_amount: u64,
+    pub target_price: u64,
+    pub minimum_receive: u64,
+    pub expires_at: i64,
+}
+
+/// Event emitted when a limit order is executed (Module 3.4)
+#[event]
+pub struct LimitOrderExecuted {
+    pub order: Pubkey,
+    pub owner: Pubkey,
+    pub pool: Pubkey,
+    pub sell_amount: u64,
+    pub receive_amount: u64,
+    pub execution_price: u64,
+    pub executed_at: i64,
+}
+
+/// Event emitted when a limit order is cancelled (Module 3.4)
+#[event]
+pub struct LimitOrderCancelled {
+    pub order: Pubkey,
+    pub owner: Pubkey,
+    pub refunded_amount: u64,
+    pub cancelled_at: i64,
 }
 
 // ============================================================================
@@ -327,6 +292,53 @@ fn isqrt(n: u128) -> u128 {
     }
     
     x
+}
+
+// ============================================================================
+// MODULE 3.5: PRICE CALCULATION HELPERS (Pyth Oracle & Local Pool Price)
+// ============================================================================
+
+/// Calculate local pool price with 6 decimal precision
+/// 
+/// Formula: price = (reserve_b * 1_000_000) / reserve_a
+/// Returns price of token_a in terms of token_b
+fn calculate_pool_price(reserve_a: u64, reserve_b: u64) -> Result<u64> {
+    require!(reserve_a > 0, CustomError::InsufficientLiquidity);
+    
+    let price = (reserve_b as u128)
+        .checked_mul(1_000_000)
+        .ok_or(error!(CustomError::CalculationOverflow))?
+        .checked_div(reserve_a as u128)
+        .ok_or(error!(CustomError::CalculationOverflow))? as u64;
+    
+    Ok(price)
+}
+
+/// Compare pool price against target price for limit order execution
+/// 
+/// For sell orders (selling token_a for token_b):
+/// - Condition: pool_price >= target_price (want more token_b per token_a)
+/// 
+/// Parameters:
+/// - pool_price: Current pool price (reserve_b / reserve_a) with 6 decimals
+/// - target_price: Target price with 6 decimals
+/// - is_sell: true if selling token_a, false if selling token_b
+/// 
+/// Returns: true if price condition is met
+fn check_price_condition(
+    pool_price: u64,
+    target_price: u64,
+    is_sell: bool,
+) -> bool {
+    if is_sell {
+        // For sell: we want pool_price >= target_price
+        // (want to receive more per unit)
+        pool_price >= target_price
+    } else {
+        // For buy: we want pool_price <= target_price
+        // (want to pay less per unit)
+        pool_price <= target_price
+    }
 }
 
 // ============================================================================
@@ -1189,6 +1201,261 @@ pub mod solrush_dex {
 
         Ok(())
     }
+
+    // ========================================================================
+    // MODULE 3.4: CREATE LIMIT ORDER
+    // ========================================================================
+
+    /// Create a limit order that waits for price condition before execution
+    /// 
+    /// Parameters:
+    /// - sell_amount: Amount of tokens to sell
+    /// - target_price: Target price with 6 decimals (e.g., 105000000 = 105.0)
+    /// - minimum_receive: Minimum tokens to receive
+    /// - expiry_days: Order valid for X days
+    pub fn create_limit_order(
+        ctx: Context<CreateLimitOrder>,
+        sell_amount: u64,
+        target_price: u64,
+        minimum_receive: u64,
+        expiry_days: i64,
+    ) -> Result<()> {
+        // Validation
+        require!(sell_amount > 0, CustomError::InvalidAmount);
+        require!(target_price > 0, CustomError::InvalidAmount);
+        require!(minimum_receive > 0, CustomError::InvalidAmount);
+        require!(expiry_days > 0, CustomError::InvalidExpiryTime);
+
+        // Verify user has sufficient sell tokens
+        require!(
+            ctx.accounts.user_token_in.amount >= sell_amount,
+            CustomError::InsufficientBalance
+        );
+
+        // Create limit order account
+        let order = &mut ctx.accounts.limit_order;
+        let now = Clock::get()?.unix_timestamp;
+        
+        order.owner = ctx.accounts.user.key();
+        order.pool = ctx.accounts.pool.key();
+        order.sell_token = ctx.accounts.user_token_in.mint;
+        order.buy_token = ctx.accounts.user_token_out.mint;
+        order.sell_amount = sell_amount;
+        order.target_price = target_price;
+        order.minimum_receive = minimum_receive;
+        order.created_at = now;
+        order.expires_at = now + (expiry_days * 86400); // 86400 seconds per day
+        order.status = OrderStatus::Pending;
+        order.bump = ctx.bumps.limit_order;
+
+        // Transfer sell tokens from user to escrow vault
+        transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_token_in.to_account_info(),
+                    to: ctx.accounts.order_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            sell_amount,
+        )?;
+
+        emit!(LimitOrderCreated {
+            order: order.key(),
+            owner: ctx.accounts.user.key(),
+            pool: ctx.accounts.pool.key(),
+            sell_token: ctx.accounts.user_token_in.mint,
+            buy_token: ctx.accounts.user_token_out.mint,
+            sell_amount,
+            target_price,
+            minimum_receive,
+            expires_at: order.expires_at,
+        });
+
+        msg!(
+            "⏰ Limit order created: Amount={} | Target Price={} | Expires at={}",
+            sell_amount,
+            target_price,
+            order.expires_at
+        );
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // MODULE 3.4: EXECUTE LIMIT ORDER
+    // ========================================================================
+
+    /// Execute a limit order when price condition is met
+    /// Can be called by anyone (bot, keeper, or owner)
+    pub fn execute_limit_order(
+        ctx: Context<ExecuteLimitOrder>,
+    ) -> Result<()> {
+        let order = &mut ctx.accounts.limit_order;
+        let pool = &mut ctx.accounts.pool;
+        let now = Clock::get()?.unix_timestamp;
+
+        // Verify order status
+        require!(
+            order.status == OrderStatus::Pending,
+            CustomError::InvalidOrderStatus
+        );
+
+        // Verify order hasn't expired
+        require!(now < order.expires_at, CustomError::OrderExpired);
+
+        // Get current pool price using Pyth Oracle
+        let current_price = calculate_pool_price(pool.reserve_a, pool.reserve_b)?;
+
+        // Determine if this is a sell order (selling token_a) or buy order
+        let is_sell = order.sell_token == pool.token_a_mint;
+
+        // Check if price condition is met
+        require!(
+            check_price_condition(current_price, order.target_price, is_sell),
+            CustomError::PriceConditionNotMet
+        );
+
+        // Calculate output amount using AMM
+        let output_amount = utils::calculate_output_amount(
+            order.sell_amount,
+            if is_sell { pool.reserve_a } else { pool.reserve_b },
+            if is_sell { pool.reserve_b } else { pool.reserve_a },
+            pool.fee_numerator,
+            pool.fee_denominator,
+        )?;
+
+        // Verify meets minimum receive requirement
+        require!(
+            output_amount >= order.minimum_receive,
+            CustomError::SlippageTooHigh
+        );
+
+        // Update pool reserves
+        if is_sell {
+            pool.reserve_a = pool
+                .reserve_a
+                .checked_add(order.sell_amount)
+                .ok_or(error!(CustomError::CalculationOverflow))?;
+            pool.reserve_b = pool
+                .reserve_b
+                .checked_sub(output_amount)
+                .ok_or(error!(CustomError::InsufficientPoolReserves))?;
+        } else {
+            pool.reserve_b = pool
+                .reserve_b
+                .checked_add(order.sell_amount)
+                .ok_or(error!(CustomError::CalculationOverflow))?;
+            pool.reserve_a = pool
+                .reserve_a
+                .checked_sub(output_amount)
+                .ok_or(error!(CustomError::InsufficientPoolReserves))?;
+        }
+
+        // Transfer output tokens to order owner
+        let pool_key = pool.key();
+        let token_a_mint = pool.token_a_mint;
+        let token_b_mint = pool.token_b_mint;
+        let bump_seed = pool.bump;
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"pool",
+            token_a_mint.as_ref(),
+            token_b_mint.as_ref(),
+            &[bump_seed],
+        ]];
+
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.pool_vault_out.to_account_info(),
+                    to: ctx.accounts.user_token_out.to_account_info(),
+                    authority: pool.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            output_amount,
+        )?;
+
+        // Update order status
+        order.status = OrderStatus::Executed;
+
+        emit!(LimitOrderExecuted {
+            order: order.key(),
+            owner: order.owner,
+            pool: pool_key,
+            sell_amount: order.sell_amount,
+            receive_amount: output_amount,
+            execution_price: current_price,
+            executed_at: now,
+        });
+
+        msg!(
+            "✅ Limit order executed: Sold={} | Received={} | Price={}",
+            order.sell_amount,
+            output_amount,
+            current_price
+        );
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // MODULE 3.4: CANCEL LIMIT ORDER
+    // ========================================================================
+
+    /// Cancel a pending limit order and refund escrow
+    /// Only the order owner can cancel
+    pub fn cancel_limit_order(
+        ctx: Context<CancelLimitOrder>,
+    ) -> Result<()> {
+        let order = &mut ctx.accounts.limit_order;
+
+        // Verify caller is order owner
+        require!(
+            ctx.accounts.user.key() == order.owner,
+            CustomError::UnauthorizedOrderOwner
+        );
+
+        // Verify order is still pending
+        require!(
+            order.status == OrderStatus::Pending,
+            CustomError::InvalidOrderStatus
+        );
+
+        let now = Clock::get()?.unix_timestamp;
+
+        // Refund escrowed tokens to owner
+        transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.order_vault.to_account_info(),
+                    to: ctx.accounts.user_token_in.to_account_info(),
+                    authority: order.to_account_info(),
+                },
+            ),
+            order.sell_amount,
+        )?;
+
+        // Update order status
+        order.status = OrderStatus::Cancelled;
+
+        emit!(LimitOrderCancelled {
+            order: order.key(),
+            owner: order.owner,
+            refunded_amount: order.sell_amount,
+            cancelled_at: now,
+        });
+
+        msg!(
+            "❌ Limit order cancelled: Amount refunded={}",
+            order.sell_amount
+        );
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -1452,6 +1719,101 @@ pub struct MarketSell<'info> {
     /// Pool's USDC vault (sends USDC)
     #[account(mut)]
     pub pool_vault_out: Account<'info, TokenAccount>,
+    
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+// ============================================================================
+// CREATE LIMIT ORDER CONTEXT (Module 3.4)
+// ============================================================================
+
+#[derive(Accounts)]
+#[instruction(sell_amount: u64, target_price: u64, minimum_receive: u64, expiry_days: i64)]
+pub struct CreateLimitOrder<'info> {
+    #[account(mut)]
+    pub pool: Account<'info, LiquidityPool>,
+    
+    #[account(
+        init,
+        payer = user,
+        space = LimitOrder::SIZE,
+        seeds = [b"limit_order", pool.key().as_ref(), user.key().as_ref()],
+        bump
+    )]
+    pub limit_order: Account<'info, LimitOrder>,
+    
+    /// User's sell token mint
+    pub sell_token_mint: Account<'info, Mint>,
+    
+    /// User's sell token account
+    #[account(mut, token::mint = sell_token_mint, token::authority = user)]
+    pub user_token_in: Account<'info, TokenAccount>,
+    
+    /// User's buy token account  
+    #[account(mut)]
+    pub user_token_out: Account<'info, TokenAccount>,
+    
+    /// Escrow vault for sell tokens
+    #[account(
+        init,
+        payer = user,
+        token::mint = sell_token_mint,
+        token::authority = limit_order
+    )]
+    pub order_vault: Account<'info, TokenAccount>,
+    
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+// ============================================================================
+// EXECUTE LIMIT ORDER CONTEXT (Module 3.4)
+// ============================================================================
+
+#[derive(Accounts)]
+pub struct ExecuteLimitOrder<'info> {
+    #[account(mut)]
+    pub pool: Account<'info, LiquidityPool>,
+    
+    #[account(mut)]
+    pub limit_order: Account<'info, LimitOrder>,
+    
+    /// Output token account for order owner
+    #[account(mut)]
+    pub user_token_out: Account<'info, TokenAccount>,
+    
+    /// Pool's output vault
+    #[account(mut)]
+    pub pool_vault_out: Account<'info, TokenAccount>,
+    
+    /// Pyth price account for real-time price feed
+    pub pyth_price_account: AccountInfo<'info>,
+    
+    pub token_program: Program<'info, Token>,
+}
+
+// ============================================================================
+// CANCEL LIMIT ORDER CONTEXT (Module 3.4)
+// ============================================================================
+
+#[derive(Accounts)]
+pub struct CancelLimitOrder<'info> {
+    #[account(mut)]
+    pub limit_order: Account<'info, LimitOrder>,
+    
+    /// Escrow vault holding sell tokens
+    #[account(mut)]
+    pub order_vault: Account<'info, TokenAccount>,
+    
+    /// User's sell token account (to receive refund)
+    #[account(mut)]
+    pub user_token_in: Account<'info, TokenAccount>,
     
     #[account(mut)]
     pub user: Signer<'info>,

@@ -1,6 +1,10 @@
 use anchor_lang::prelude::*;
 use crate::errors::CustomError;
 
+// ============================================================================
+// UTILITY FUNCTIONS (Module 2.1, 2.3, 2.4, 2.5, 3.1 Helpers)
+// ============================================================================
+
 /// Calculate LP tokens using geometric mean formula
 /// LP tokens = sqrt(amount_a * amount_b)
 /// Used in initialize_pool (Module 2.2)
@@ -97,15 +101,19 @@ pub fn validate_ratio_imbalance(
     Ok(())
 }
 
-/// Module 2.5: Calculate output amount for swaps with fee
+/// Module 2.5 & 3.1: Calculate output amount for swaps with fee
 /// 
-/// Formula:
-/// amount_with_fee = input_amount * (fee_denominator - fee_numerator) / fee_denominator
-/// numerator = amount_with_fee * output_reserve
-/// denominator = input_reserve * fee_denominator + amount_with_fee * fee_denominator
-/// output = numerator / denominator
-///
-/// This implements the constant product formula: (x + amount_in) * (y - amount_out) = x * y
+/// Implements constant product formula: (x + amount_in) * (y - amount_out) = x * y
+/// With fee deduction applied before swap calculation
+/// 
+/// Parameters:
+/// - input_amount: Amount of input token to swap
+/// - input_reserve: Current reserve of input token in pool
+/// - output_reserve: Current reserve of output token in pool
+/// - fee_numerator: Fee numerator (e.g., 3 for 0.3% fee)
+/// - fee_denominator: Fee denominator (e.g., 1000 for 0.3% fee)
+/// 
+/// Returns: Amount of output tokens received
 pub fn calculate_output_amount(
     input_amount: u64,
     input_reserve: u64,
@@ -155,18 +163,6 @@ pub fn calculate_output_amount(
     Ok(output_amount as u64)
 }
 
-/// Module 2.5: Get pool price (reserve_b / reserve_a)
-/// Returns price as f64 for off-chain calculations
-/// 
-/// Price = reserve_b / reserve_a
-/// Represents how many units of token_b equal 1 unit of token_a
-pub fn get_pool_price(reserve_a: u64, reserve_b: u64) -> Result<f64> {
-    require!(reserve_a > 0, CustomError::InsufficientLiquidity);
-    
-    let price = (reserve_b as f64) / (reserve_a as f64);
-    Ok(price)
-}
-
 /// Integer square root using Newton's method
 pub fn isqrt(n: u128) -> u128 {
     if n < 2 {
@@ -184,4 +180,69 @@ pub fn isqrt(n: u128) -> u128 {
     x
 }
 
+// ============================================================================
+// PYTH ORACLE PRICE FUNCTIONS (Module 3.5)
+// ============================================================================
+
+/// Get price from Pyth Oracle with 6 decimal precision
+/// 
+/// Note: This is a placeholder for Pyth integration.
+/// Currently returns 0 - will be fully implemented with Pyth SDK in future updates.
+/// 
+/// For now, use calculate_pool_price() for local AMM price calculations.
+/// 
+/// Parameters:
+/// - price_account: Pyth price account info
+/// 
+/// Returns: Price with 6 decimal precision
+#[allow(unused)]
+pub fn get_pyth_price(price_account: &AccountInfo) -> Result<u64> {
+    // TODO: Implement Pyth Oracle integration
+    // For now, return 0 as placeholder
+    // This will be replaced with actual Pyth price fetching in future updates
+    Ok(0)
+}
+
+/// Calculate local pool price with 6 decimal precision
+/// 
+/// Formula: price = (reserve_b * 1_000_000) / reserve_a
+/// Returns price of token_a in terms of token_b
+pub fn calculate_pool_price(reserve_a: u64, reserve_b: u64) -> Result<u64> {
+    require!(reserve_a > 0, CustomError::InsufficientLiquidity);
+    
+    let price = (reserve_b as u128)
+        .checked_mul(1_000_000)
+        .ok_or(error!(CustomError::CalculationOverflow))?
+        .checked_div(reserve_a as u128)
+        .ok_or(error!(CustomError::CalculationOverflow))? as u64;
+    
+    Ok(price)
+}
+
+/// Compare pool price against target price for limit order execution
+/// 
+/// For sell orders (selling token_a for token_b):
+/// - Condition: pool_price >= target_price (want more token_b per token_a)
+/// 
+/// Parameters:
+/// - pool_price: Current pool price (reserve_b / reserve_a) with 6 decimals
+/// - target_price: Target price with 6 decimals
+/// - is_sell: true if selling token_a, false if selling token_b
+/// 
+/// Returns: true if price condition is met
+pub fn check_price_condition(
+    pool_price: u64,
+    target_price: u64,
+    is_sell: bool,
+) -> bool {
+    if is_sell {
+        // For sell: we want pool_price >= target_price
+        // (want to receive more per unit)
+        pool_price >= target_price
+    } else {
+        // For buy: we want pool_price <= target_price
+        // (want to pay less per unit)
+        pool_price <= target_price
+    }
+}
 

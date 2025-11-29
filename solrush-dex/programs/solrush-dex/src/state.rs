@@ -49,3 +49,38 @@ pub struct UserLiquidityPosition {
 impl UserLiquidityPosition {
     pub const SIZE: usize = 8 + 32*2 + 8*4 + 1;
 }
+
+/// OrderStatus Enum (Module 3.4)
+/// Tracks the lifecycle state of a limit order
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum OrderStatus {
+    Pending = 0,    // Order awaiting execution
+    Executed = 1,   // Order successfully executed
+    Cancelled = 2,  // Order cancelled by owner
+    Expired = 3,    // Order expiry time passed
+}
+
+/// LimitOrder Account Structure (Module 3.4)
+/// Stores a single limit order with price conditions and escrow
+///
+/// Space: 8 (discriminator) + 32*4 + 8*5 + 8*2 + 1 + 1 = 181 bytes
+#[account]
+pub struct LimitOrder {
+    pub owner: Pubkey,           // Order creator wallet (32 bytes)
+    pub pool: Pubkey,            // Target pool for execution (32 bytes)
+    pub sell_token: Pubkey,      // Token being sold (32 bytes)
+    pub buy_token: Pubkey,       // Token being bought (32 bytes)
+    
+    pub sell_amount: u64,        // Amount of sell_token in escrow (8 bytes)
+    pub target_price: u64,       // Target price with 6 decimals (8 bytes)
+    pub minimum_receive: u64,    // Minimum output amount (8 bytes)
+    pub created_at: i64,         // Timestamp when order created (8 bytes)
+    pub expires_at: i64,         // Expiry timestamp (8 bytes)
+    
+    pub status: OrderStatus,     // Current order status (1 byte)
+    pub bump: u8,                // PDA bump seed (1 byte)
+}
+
+impl LimitOrder {
+    pub const SIZE: usize = 8 + 32*4 + 8*5 + 8*2 + 1 + 1;
+}

@@ -31,4 +31,32 @@ pub enum CustomError {
     
     #[msg("Insufficient pool reserves")]
     InsufficientPoolReserves,
+    
+    // ============================================================================
+    // Module 3.4: Limit Order Errors
+    // ============================================================================
+    
+    #[msg("Limit order not found")]
+    OrderNotFound,
+    
+    #[msg("Invalid order status for this operation")]
+    InvalidOrderStatus,
+    
+    #[msg("Limit order has expired")]
+    OrderExpired,
+    
+    #[msg("Only order owner can cancel")]
+    UnauthorizedOrderOwner,
+    
+    #[msg("Price condition not met for execution")]
+    PriceConditionNotMet,
+    
+    #[msg("Invalid expiry time")]
+    InvalidExpiryTime,
+    
+    #[msg("Pyth price data unavailable")]
+    PythPriceUnavailable,
+    
+    #[msg("Pyth price data is stale")]
+    StalePriceData,
 }
