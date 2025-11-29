@@ -1,0 +1,37 @@
+use anchor_lang::prelude::*;
+
+/// Event emitted when a new pool is created (Module 2.2)
+#[event]
+pub struct PoolCreated {
+    pub pool: Pubkey,
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub reserve_a: u64,
+    pub reserve_b: u64,
+    pub lp_token_supply: u64,
+    pub authority: Pubkey,
+}
+
+/// Event emitted when liquidity is added to a pool (Module 2.3)
+#[event]
+pub struct LiquidityAdded {
+    pub user: Pubkey,
+    pub pool: Pubkey,
+    pub amount_a: u64,
+    pub amount_b: u64,
+    pub lp_tokens_minted: u64,
+    pub new_reserve_a: u64,
+    pub new_reserve_b: u64,
+}
+
+/// Event emitted when liquidity is removed from a pool (Module 2.4)
+#[event]
+pub struct LiquidityRemoved {
+    pub user: Pubkey,
+    pub pool: Pubkey,
+    pub lp_tokens_burned: u64,
+    pub amount_a_received: u64,
+    pub amount_b_received: u64,
+    pub new_reserve_a: u64,
+    pub new_reserve_b: u64,
+}
