@@ -11,11 +11,12 @@ interface Token {
 }
 
 interface TokenSelectProps {
-  value?: Token;
-  onChange?: (token: Token) => void;
+  value?: Token | string;
+  onChange?: (token: Token | string) => void;
   tokens?: Token[];
   placeholder?: string;
   className?: string;
+  exclude?: string[];
 }
 
 const DEFAULT_TOKENS: Token[] = [
@@ -42,18 +43,26 @@ export function TokenSelect({
   tokens = DEFAULT_TOKENS,
   placeholder = 'Select token',
   className,
+  exclude = [],
 }: TokenSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
 
+  // Get Token object from value (string or Token)
+  const selectedToken =
+    typeof value === 'string'
+      ? tokens.find((t) => t.symbol === value)
+      : value;
+
   const filteredTokens = tokens.filter(
     (token) =>
-      token.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      token.name.toLowerCase().includes(search.toLowerCase())
+      (token.symbol.toLowerCase().includes(search.toLowerCase()) ||
+        token.name.toLowerCase().includes(search.toLowerCase())) &&
+      !exclude.includes(token.symbol)
   );
 
   const handleSelect = (token: Token) => {
-    onChange?.(token);
+    onChange?.(token.symbol);
     setIsOpen(false);
     setSearch('');
   };
@@ -66,12 +75,14 @@ export function TokenSelect({
         className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
       >
         <div className="flex items-center gap-3 flex-1">
-          {value ? (
+          {selectedToken ? (
             <>
-              <span className="text-2xl">{value.icon}</span>
+              <span className="text-2xl">{selectedToken.icon}</span>
               <div className="flex flex-col items-start">
-                <span className="font-semibold text-white">{value.symbol}</span>
-                <span className="text-xs text-white/50">{value.name}</span>
+                <span className="font-semibold text-white">
+                  {selectedToken.symbol}
+                </span>
+                <span className="text-xs text-white/50">{selectedToken.name}</span>
               </div>
             </>
           ) : (
@@ -113,15 +124,18 @@ export function TokenSelect({
                   onClick={() => handleSelect(token)}
                   className={cn(
                     'w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition-colors text-left',
-                    value?.symbol === token.symbol && 'bg-purple-500/20 border-l-2 border-purple-500'
+                    selectedToken?.symbol === token.symbol &&
+                      'bg-purple-500/20 border-l-2 border-purple-500'
                   )}
                 >
                   <span className="text-2xl">{token.icon}</span>
                   <div className="flex flex-col flex-1">
-                    <span className="font-semibold text-white">{token.symbol}</span>
+                    <span className="font-semibold text-white">
+                      {token.symbol}
+                    </span>
                     <span className="text-xs text-white/50">{token.name}</span>
                   </div>
-                  {value?.symbol === token.symbol && (
+                  {selectedToken?.symbol === token.symbol && (
                     <div className="h-2 w-2 bg-purple-500 rounded-full" />
                   )}
                 </button>

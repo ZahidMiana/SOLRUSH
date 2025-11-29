@@ -1,83 +1,253 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { usePool } from "@/lib/hooks/usePool";
+import { useState, useEffect } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { TokenSelect } from '@/components/ui/token-select';
+import { ArrowUpDown, Info } from 'lucide-react';
+import { usePool } from '@/lib/hooks/usePool';
+import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
-interface AddLiquidityProps {
-  poolId: string;
-  tokenAName: string;
-  tokenBName: string;
-}
+/**
+ * AddLiquidity Component - Module 6.4
+ * Allows users to provide liquidity to pools
+ * Features dual token input, auto-calculation, LP token display, and pool share percentage
+ */
+export function AddLiquidity({ poolAddress }: { poolAddress: string }) {
+  const { publicKey } = useWallet();
+  const { toast } = useToast();
 
-export const AddLiquidity = ({
-  poolId,
-  tokenAName,
-  tokenBName,
-}: AddLiquidityProps) => {
-  const [amountA, setAmountA] = useState("");
-  const [amountB, setAmountB] = useState("");
-  const [loading, setLoading] = useState(false);
-  const pool = usePool(poolId);
+  const [amountA, setAmountA] = useState('');
+  const [amountB, setAmountB] = useState('');
+  const [tokenA] = useState('SOL');
+  const [tokenB] = useState('USDC');
+  const [showDetails, setShowDetails] = useState(false);
+
+  const { pool, loading, addLiquidity, calculateLPTokens, calculatePoolShare } =
+    usePool(poolAddress);
+
+  // Auto-calculate second amount based on pool ratio
+  useEffect(() => {
+    if (amountA && parseFloat(amountA) > 0) {
+      const ratio = pool.reserveB / pool.reserveA;
+      const calculated = (parseFloat(amountA) * ratio).toFixed(6);
+      setAmountB(calculated);
+    } else {
+      setAmountB('');
+    }
+  }, [amountA, pool.reserveA, pool.reserveB]);
+
+  const lpTokensToReceive =
+    amountA && amountB
+      ? calculateLPTokens(parseFloat(amountA), parseFloat(amountB))
+      : 0;
+
+  const poolSharePercentage =
+    lpTokensToReceive > 0
+      ? calculatePoolShare(lpTokensToReceive)
+      : 0;
 
   const handleAddLiquidity = async () => {
-    setLoading(true);
-    // TODO: Execute add liquidity transaction
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setLoading(false);
-    setAmountA("");
-    setAmountB("");
+    if (!publicKey) {
+      toast({
+        title: 'Wallet Not Connected',
+        description: 'Please connect your wallet to continue.',
+      });
+      return;
+    }
+
+    if (!amountA || !amountB) {
+      toast({
+        title: 'Invalid Amounts',
+        description: 'Please enter amounts for both tokens.',
+      });
+      return;
+    }
+
+    try {
+      const signature = await addLiquidity({
+        amountA: parseFloat(amountA),
+        amountB: parseFloat(amountB),
+      });
+
+      toast({
+        title: 'Liquidity Added Successfully!',
+        description: `Received ${lpTokensToReceive.toFixed(2)} LP tokens. TX: ${signature.slice(0, 8)}...`,
+      });
+
+      setAmountA('');
+      setAmountB('');
+    } catch (error: any) {
+      toast({
+        title: 'Failed to Add Liquidity',
+        description: error.message || 'Transaction failed.',
+      });
+    }
   };
 
+  const exchangeRate = pool.reserveB / pool.reserveA;
+
   return (
-    <div className="max-w-md mx-auto bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <h2 className="text-2xl font-bold text-white mb-6">Add Liquidity</h2>
+    <Card className="w-full max-w-lg">
+      <CardHeader>
+        <CardTitle>Add Liquidity</CardTitle>
+        <CardDescription>
+          Provide liquidity to earn rewards from trading fees
+        </CardDescription>
+      </CardHeader>
 
-      {/* Amount A */}
-      <div className="mb-4">
-        <label className="text-gray-400 text-sm mb-2 block">{tokenAName}</label>
-        <input
-          type="number"
-          placeholder="0.00"
-          value={amountA}
-          onChange={(e) => setAmountA(e.target.value)}
-          className="w-full bg-gray-800 text-white placeholder-gray-500 outline-none px-4 py-3 rounded-lg border border-gray-700 focus:border-blue-500"
-        />
-      </div>
-
-      {/* Amount B */}
-      <div className="mb-6">
-        <label className="text-gray-400 text-sm mb-2 block">{tokenBName}</label>
-        <input
-          type="number"
-          placeholder="0.00"
-          value={amountB}
-          onChange={(e) => setAmountB(e.target.value)}
-          className="w-full bg-gray-800 text-white placeholder-gray-500 outline-none px-4 py-3 rounded-lg border border-gray-700 focus:border-blue-500"
-        />
-      </div>
-
-      {/* Pool Stats */}
-      <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
-        <div className="flex justify-between mb-2">
-          <span className="text-gray-400">Pool Fee:</span>
-          <span className="text-white font-semibold">{pool.fee}%</span>
+      <CardContent className="space-y-4">
+        {/* Token A Input */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white/70">
+            {tokenA} Amount
+          </label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              placeholder="0.0"
+              value={amountA}
+              onChange={(e) => setAmountA(e.target.value)}
+              className="flex-1"
+            />
+            <div className="px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-white font-medium min-w-20 flex items-center justify-center">
+              {tokenA}
+            </div>
+          </div>
+          <div className="text-xs text-white/50">Balance: 10.5 {tokenA}</div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-400">Pool Size:</span>
-          <span className="text-white font-semibold">
-            ${(pool.tokenAReserve + pool.tokenBReserve).toLocaleString()}
-          </span>
-        </div>
-      </div>
 
-      {/* Add Button */}
-      <button
-        onClick={handleAddLiquidity}
-        disabled={!amountA || !amountB || loading || pool.loading}
-        className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors"
-      >
-        {loading ? "Adding..." : "Add Liquidity"}
-      </button>
-    </div>
+        {/* Plus Icon */}
+        <div className="flex justify-center">
+          <div className="text-white/50 text-lg">+</div>
+        </div>
+
+        {/* Token B Input */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white/70">
+            {tokenB} Amount
+          </label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              placeholder="0.0"
+              value={amountB}
+              readOnly
+              className="flex-1 bg-white/5"
+            />
+            <div className="px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-white font-medium min-w-20 flex items-center justify-center">
+              {tokenB}
+            </div>
+          </div>
+          <div className="text-xs text-white/50">Balance: 250 {tokenB}</div>
+        </div>
+
+        {/* Pool Details */}
+        {amountA && (
+          <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-sm font-semibold text-white">
+                  Liquidity Details
+                </h3>
+                <button
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="text-white/50 hover:text-white/70"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-white/50">Exchange Rate</span>
+                  <span className="text-white font-medium">
+                    1 {tokenA} = {exchangeRate.toFixed(2)} {tokenB}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50">LP Tokens to Receive</span>
+                  <span className="text-white font-medium">
+                    {lpTokensToReceive.toFixed(4)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50">Your Pool Share</span>
+                  <span className="text-green-400 font-medium">
+                    {poolSharePercentage.toFixed(4)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {showDetails && (
+              <div className="pt-3 border-t border-white/10 text-xs text-white/50 space-y-1">
+                <div>
+                  <strong className="text-white/70">Pool Info:</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>{tokenA} Reserve:</span>
+                  <span className="text-white">
+                    {pool.reserveA.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{tokenB} Reserve:</span>
+                  <span className="text-white">
+                    {pool.reserveB.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total LP Supply:</span>
+                  <span className="text-white">
+                    {pool.totalLPSupply.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>APY:</span>
+                  <span className="text-green-400">{pool.apy}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>TVL:</span>
+                  <span className="text-white">
+                    ${pool.tvl.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Warning about price range */}
+        <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg text-xs text-yellow-200">
+          <strong>Note:</strong> Your liquidity is concentrated at the current
+          pool ratio. Consider adding liquidity at different price ranges for
+          better returns.
+        </div>
+
+        {/* Add Liquidity Button */}
+        <Button
+          onClick={handleAddLiquidity}
+          disabled={!publicKey || loading || !amountA || !amountB}
+          className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+          size="lg"
+        >
+          {!publicKey
+            ? 'Connect Wallet'
+            : loading
+              ? 'Adding Liquidity...'
+              : 'Add Liquidity'}
+        </Button>
+      </CardContent>
+    </Card>
   );
-};
+}
