@@ -1,8 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
 
-export const DEVNET_RPC = "https://api.devnet.solana.com";
+// Network configuration from environment variables
+export const DEVNET_RPC = 
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+  
 export const PROGRAM_ID = new PublicKey(
-  "3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT"
+  process.env.NEXT_PUBLIC_PROGRAM_ID || "3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT"
 );
 
 // Token Mints (Devnet)
