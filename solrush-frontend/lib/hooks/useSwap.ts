@@ -77,8 +77,8 @@ export function useSwap() {
         const feeNumerator = Number(data.readBigUInt64LE(offset + 24));
         const feeDenominator = Number(data.readBigUInt64LE(offset + 32));
         
-        // Determine direction (A to B or B to A)
-        const isAToB = inputMint.toBuffer().compare(outputMint.toBuffer()) < 0;
+        // Determine direction (A to B or B to A) by comparing bytes
+        const isAToB = Buffer.compare(inputMint.toBytes(), outputMint.toBytes()) < 0;
         
         // Normalize reserves based on decimals
         const inputDecimals = inputToken === 'SOL' ? 9 : 6;

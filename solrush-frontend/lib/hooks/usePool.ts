@@ -6,7 +6,7 @@ import { BN } from '@project-serum/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { getProgram } from '../anchor/setup';
 import { findVaultAddress, findLpMintAddress } from '../anchor/pda';
-import { TOKENS } from '../constants';
+import { getTokenMint } from '../constants';
 import { getAssociatedTokenAddress, getAccount, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export interface PoolData {
@@ -178,19 +178,6 @@ export function usePool(poolAddress: string) {
     if (totalSupply === 0) return 100;
     return (userLPTokens / (totalSupply + userLPTokens)) * 100;
   }, [pool.totalLPSupply]);
-
-  /**
-   * Get token mint based on symbol
-   */
-  const getTokenMint = (symbol: string): PublicKey => {
-    switch (symbol.toUpperCase()) {
-      case 'SOL': return TOKENS.SOL;
-      case 'USDC': return TOKENS.USDC;
-      case 'USDT': return TOKENS.USDT;
-      case 'RUSH': return TOKENS.RUSH;
-      default: throw new Error(`Unknown token: ${symbol}`);
-    }
-  };
 
   /**
    * Add liquidity to pool

@@ -202,10 +202,8 @@
           "type": "u64"
         },
         {
-          "name": "swapDirection",
-          "type": {
-            "defined": "SwapDirection"
-          }
+          "name": "isAToB",
+          "type": "bool"
         }
       ]
     }
@@ -261,22 +259,7 @@
       ]
     }
   ],
-  "types": [
-    {
-      "name": "SwapDirection",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "AToB"
-          },
-          {
-            "name": "BToA"
-          }
-        ]
-      }
-    }
-  ],
+  "types": [],
   "errors": [
     {
       "code": 6000,
