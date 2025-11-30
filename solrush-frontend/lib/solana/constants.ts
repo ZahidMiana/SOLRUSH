@@ -1,8 +1,31 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, clusterApiUrl } from "@solana/web3.js";
 
-export const DEVNET_RPC = "https://api.devnet.solana.com";
+// Network configuration
+export type NetworkType = 'localnet' | 'devnet' | 'mainnet-beta';
+
+const getNetworkUrl = (): string => {
+  const network = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet') as NetworkType;
+  
+  // Allow custom RPC URL override
+  const customRpc = process.env.NEXT_PUBLIC_RPC_URL;
+  if (customRpc) {
+    return customRpc;
+  }
+  
+  switch (network) {
+    case 'localnet':
+      return 'http://127.0.0.1:8899';
+    case 'mainnet-beta':
+      return clusterApiUrl('mainnet-beta');
+    case 'devnet':
+    default:
+      return clusterApiUrl('devnet');
+  }
+};
+
+export const DEVNET_RPC = getNetworkUrl();
 export const PROGRAM_ID = new PublicKey(
-  "3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT"
+  process.env.NEXT_PUBLIC_PROGRAM_ID || "3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT"
 );
 
 // Token Mints (Devnet)

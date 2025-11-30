@@ -12,12 +12,14 @@ import { PoolsView } from '@/components/pools/PoolsView';
  * - View: PoolsView component
  */
 export default function PoolsPage() {
-  const { pools, handleAddLiquidity } = usePools();
+  const { pools, loading, error, refreshPools } = usePools();
 
   return (
     <PoolsView
       pools={pools}
-      handleAddLiquidity={handleAddLiquidity}
+      loading={loading}
+      error={error}
+      onRefresh={refreshPools}
     />
   );
 }
