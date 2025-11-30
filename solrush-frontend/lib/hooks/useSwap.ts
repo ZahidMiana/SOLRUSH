@@ -52,6 +52,37 @@ export interface SwapError {
 }
 
 /**
+ * Fallback mock pool data for development/testing when on-chain data is unavailable.
+ * Maps token pairs to their reserve values.
+ * TODO: Remove once on-chain pools are deployed and stable.
+ */
+const MOCK_POOL_RESERVES: { [key: string]: { reserveIn: number; reserveOut: number } } = {
+  'SOL-USDC': { reserveIn: 100, reserveOut: 10050 },
+  'USDC-SOL': { reserveIn: 10050, reserveOut: 100 },
+  'SOL-USDT': { reserveIn: 100, reserveOut: 10040 },
+  'USDT-SOL': { reserveIn: 10040, reserveOut: 100 },
+  'SOL-RUSH': { reserveIn: 100, reserveOut: 5000 },
+  'RUSH-SOL': { reserveIn: 5000, reserveOut: 100 },
+};
+
+/**
+ * Get the decimal places for a token.
+ * SOL uses 9 decimals, most stablecoins use 6.
+ * TODO: Fetch actual decimals from token mint info for accuracy.
+ */
+const getTokenDecimals = (tokenSymbol: string): number => {
+  switch (tokenSymbol) {
+    case 'SOL':
+      return 9;
+    case 'USDC':
+    case 'USDT':
+      return 6;
+    default:
+      return 9; // Default to 9 for unknown tokens
+  }
+};
+
+/**
  * Parse transaction error to provide specific user feedback
  */
 const parseSwapError = (error: Error): SwapError => {
@@ -160,9 +191,15 @@ export function useSwap() {
             accountInfo.data
           );
 
+          // Note: Decimals are estimated based on common token standards.
+          // SOL uses 9 decimals, stablecoins typically use 6.
+          // TODO: Fetch actual decimals from token mint accounts for accuracy.
+          const tokenADecimals = 9; // Assuming SOL
+          const tokenBDecimals = 6; // Assuming stablecoin
+          
           const reserves: PoolReserves = {
-            reserveA: poolData.tokenAReserve.toNumber() / 1e9, // Adjust for decimals
-            reserveB: poolData.tokenBReserve.toNumber() / 1e6, // USDC/USDT typically 6 decimals
+            reserveA: poolData.tokenAReserve.toNumber() / Math.pow(10, tokenADecimals),
+            reserveB: poolData.tokenBReserve.toNumber() / Math.pow(10, tokenBDecimals),
             tokenAMint: poolData.tokenAMint.toBase58(),
             tokenBMint: poolData.tokenBMint.toBase58(),
             feeBasisPoints: poolData.feeBasisPoints,
@@ -213,17 +250,8 @@ export function useSwap() {
       feeBasisPoints = poolData.feeBasisPoints;
     } else {
       // Fallback to mock data for development/testing
-      const mockPoolData: { [key: string]: { reserveIn: number; reserveOut: number } } = {
-        'SOL-USDC': { reserveIn: 100, reserveOut: 10050 },
-        'USDC-SOL': { reserveIn: 10050, reserveOut: 100 },
-        'SOL-USDT': { reserveIn: 100, reserveOut: 10040 },
-        'USDT-SOL': { reserveIn: 10040, reserveOut: 100 },
-        'SOL-RUSH': { reserveIn: 100, reserveOut: 5000 },
-        'RUSH-SOL': { reserveIn: 5000, reserveOut: 100 },
-      };
-
       const pairKey = `${inputToken}-${outputToken}`;
-      const pool = mockPoolData[pairKey] || { reserveIn: 100, reserveOut: 10050 };
+      const pool = MOCK_POOL_RESERVES[pairKey] || { reserveIn: 100, reserveOut: 10050 };
       reserveIn = pool.reserveIn;
       reserveOut = pool.reserveOut;
     }
@@ -281,18 +309,9 @@ export function useSwap() {
       reserveOut = isInputTokenA ? poolData.reserveB : poolData.reserveA;
       feeBasisPoints = poolData.feeBasisPoints;
     } else {
-      // Fallback mock data
-      const mockPoolData: { [key: string]: { reserveIn: number; reserveOut: number } } = {
-        'SOL-USDC': { reserveIn: 100, reserveOut: 10050 },
-        'USDC-SOL': { reserveIn: 10050, reserveOut: 100 },
-        'SOL-USDT': { reserveIn: 100, reserveOut: 10040 },
-        'USDT-SOL': { reserveIn: 10040, reserveOut: 100 },
-        'SOL-RUSH': { reserveIn: 100, reserveOut: 5000 },
-        'RUSH-SOL': { reserveIn: 5000, reserveOut: 100 },
-      };
-
+      // Fallback to mock data for development/testing
       const pairKey = `${inputToken}-${outputToken}`;
-      const pool = mockPoolData[pairKey] || { reserveIn: 100, reserveOut: 10050 };
+      const pool = MOCK_POOL_RESERVES[pairKey] || { reserveIn: 100, reserveOut: 10050 };
       reserveIn = pool.reserveIn;
       reserveOut = pool.reserveOut;
     }
@@ -378,11 +397,11 @@ export function useSwap() {
       const userTokenIn = await getAssociatedTokenAddress(inputMint, wallet.publicKey);
       const userTokenOut = await getAssociatedTokenAddress(outputMint, wallet.publicKey);
 
-      // Convert amounts to BN (assuming 9 decimals for SOL/USDC/USDT for simplicity, but should check mint decimals)
-      // TODO: Fetch decimals dynamically
-      const decimals = 9;
-      const amountInBN = new BN(params.inputAmount * Math.pow(10, decimals));
-      const minOutBN = new BN(params.minOutputAmount * Math.pow(10, decimals));
+      // Convert amounts to BN using proper token decimals
+      const inputDecimals = getTokenDecimals(params.inputToken);
+      const outputDecimals = getTokenDecimals(params.outputToken);
+      const amountInBN = new BN(params.inputAmount * Math.pow(10, inputDecimals));
+      const minOutBN = new BN(params.minOutputAmount * Math.pow(10, outputDecimals));
 
       const tx = await program.methods
         .swap(

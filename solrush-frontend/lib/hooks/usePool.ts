@@ -49,6 +49,18 @@ interface LiquidityPoolAccount {
   bump: number;
 }
 
+/**
+ * Token decimal constants.
+ * SOL uses 9 decimals, most stablecoins use 6.
+ * TODO: Fetch actual decimals from token mint info for accuracy.
+ */
+const TOKEN_DECIMALS = {
+  SOL: 9,
+  USDC: 6,
+  USDT: 6,
+  DEFAULT: 9,
+};
+
 // Error types for better user feedback
 export enum LiquidityErrorType {
   WALLET_NOT_CONNECTED = 'WALLET_NOT_CONNECTED',
@@ -184,11 +196,14 @@ export function usePool(poolAddress: string) {
             accountInfo.data
           );
 
-          const reserveA = poolData.tokenAReserve.toNumber() / 1e9;
-          const reserveB = poolData.tokenBReserve.toNumber() / 1e6;
+          // Convert reserves using token decimals
+          // Note: Assumes tokenA is SOL (9 decimals) and tokenB is a stablecoin (6 decimals)
+          const reserveA = poolData.tokenAReserve.toNumber() / Math.pow(10, TOKEN_DECIMALS.SOL);
+          const reserveB = poolData.tokenBReserve.toNumber() / Math.pow(10, TOKEN_DECIMALS.USDC);
 
           // Calculate TVL (simplified)
-          const solPrice = 100; // TODO: Fetch real price
+          // TODO: Integrate a price feed (e.g., Pyth, Switchboard) for accurate SOL price
+          const solPrice = 100;
           const tvl = reserveA * solPrice + reserveB;
 
           // Fetch LP token supply
@@ -342,8 +357,9 @@ export function usePool(poolAddress: string) {
       const userTokenB = await getAssociatedTokenAddress(poolData.tokenBMint, wallet.publicKey);
 
       // Convert amounts to BN with proper decimals
-      const amountABN = new BN(Math.floor(params.amountA * 1e9));
-      const amountBBN = new BN(Math.floor(params.amountB * 1e6));
+      // Note: Assumes tokenA is SOL (9 decimals) and tokenB is a stablecoin (6 decimals)
+      const amountABN = new BN(Math.floor(params.amountA * Math.pow(10, TOKEN_DECIMALS.SOL)));
+      const amountBBN = new BN(Math.floor(params.amountB * Math.pow(10, TOKEN_DECIMALS.USDC)));
 
       const tx = await program.methods
         .addLiquidity(amountABN, amountBBN)
@@ -441,8 +457,8 @@ export function usePool(poolAddress: string) {
 
       // Note: The IDL shows removeLiquidity takes amountA and amountB directly
       // This might need adjustment based on actual program implementation
-      const amountABN = new BN(Math.floor(shareA * 1e9));
-      const amountBBN = new BN(Math.floor(shareB * 1e6));
+      const amountABN = new BN(Math.floor(shareA * Math.pow(10, TOKEN_DECIMALS.SOL)));
+      const amountBBN = new BN(Math.floor(shareB * Math.pow(10, TOKEN_DECIMALS.USDC)));
 
       const tx = await program.methods
         .removeLiquidity(amountABN, amountBBN)

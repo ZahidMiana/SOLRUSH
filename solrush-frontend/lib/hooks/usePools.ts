@@ -112,13 +112,26 @@ export const usePools = () => {
 
         try {
             // Fetch all pool accounts from the program
-            const poolAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
-                filters: [
-                    // Filter by account size for LiquidityPool accounts
-                    // This assumes the LiquidityPool struct has a consistent size
-                    { dataSize: 256 }, // Approximate size, may need adjustment
-                ],
-            });
+            // Note: We try multiple data sizes to handle different pool account versions
+            // In production, you might want to use the program's account discriminator instead
+            const dataSizesToTry = [256, 280, 320]; // Common sizes for pool accounts
+            let poolAccounts: { pubkey: PublicKey; account: { data: Buffer } }[] = [];
+            
+            for (const dataSize of dataSizesToTry) {
+                try {
+                    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+                        filters: [
+                            { dataSize },
+                        ],
+                    });
+                    if (accounts.length > 0) {
+                        poolAccounts = accounts;
+                        break;
+                    }
+                } catch {
+                    console.warn(`No pools found with dataSize ${dataSize}`);
+                }
+            }
 
             if (poolAccounts.length === 0) {
                 // No pools found on-chain, return default pools with zero values
