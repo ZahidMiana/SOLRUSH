@@ -7,7 +7,7 @@ import { PublicKey } from '@solana/web3.js';
 import { getProgram } from '../anchor/setup';
 import { findPoolAddress, findVaultAddress } from '../anchor/pda';
 import { getTokenMint } from '../constants';
-import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export interface SwapQuote {
   inputAmount: number;
@@ -25,6 +25,13 @@ interface PoolReserves {
   tokenBMint: string;
   feeBasisPoints: number;
 }
+
+interface CachedPoolReserves extends PoolReserves {
+  timestamp: number;
+}
+
+// Cache expiry time in milliseconds (30 seconds)
+const CACHE_EXPIRY_MS = 30 * 1000;
 
 interface LiquidityPoolAccount {
   tokenAMint: PublicKey;
@@ -152,8 +159,8 @@ export function useSwap() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<SwapError | null>(null);
 
-  // Cache for pool reserves
-  const [poolReservesCache, setPoolReservesCache] = useState<Map<string, PoolReserves>>(new Map());
+  // Cache for pool reserves with expiration timestamps
+  const [poolReservesCache, setPoolReservesCache] = useState<Map<string, CachedPoolReserves>>(new Map());
 
   /**
    * Fetch pool reserves from blockchain
@@ -168,9 +175,10 @@ export function useSwap() {
       const poolAddress = findPoolAddress(inputMint, outputMint);
       const cacheKey = poolAddress.toBase58();
 
-      // Check cache first (with 30 second expiry)
+      // Check cache first with 30 second expiry
       const cached = poolReservesCache.get(cacheKey);
-      if (cached) {
+      const now = Date.now();
+      if (cached && (now - cached.timestamp) < CACHE_EXPIRY_MS) {
         return cached;
       }
 
@@ -205,8 +213,9 @@ export function useSwap() {
             feeBasisPoints: poolData.feeBasisPoints,
           };
 
-          // Cache the result
-          setPoolReservesCache(prev => new Map(prev).set(cacheKey, reserves));
+          // Cache the result with timestamp
+          const cachedReserves: CachedPoolReserves = { ...reserves, timestamp: Date.now() };
+          setPoolReservesCache(prev => new Map(prev).set(cacheKey, cachedReserves));
 
           return reserves;
         } catch (decodeError) {
@@ -416,7 +425,7 @@ export function useSwap() {
           userTokenOut,
           tokenVaultIn: isAToB ? tokenAVault : tokenBVault,
           tokenVaultOut: isAToB ? tokenBVault : tokenAVault,
-          tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 

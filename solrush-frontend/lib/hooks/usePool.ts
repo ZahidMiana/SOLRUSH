@@ -6,7 +6,7 @@ import { PublicKey } from '@solana/web3.js';
 import { BN } from '@project-serum/anchor';
 import { getProgram } from '../anchor/setup';
 import { findLpMintAddress } from '../anchor/pda';
-import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export interface PoolData {
   address: string;
@@ -370,7 +370,7 @@ export function usePool(poolAddress: string) {
           userTokenB,
           tokenAVault: poolData.tokenAVault,
           tokenBVault: poolData.tokenBVault,
-          tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -467,7 +467,7 @@ export function usePool(poolAddress: string) {
           pool: poolPubkey,
           tokenAVault: poolData.tokenAVault,
           tokenBVault: poolData.tokenBVault,
-          tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
 
