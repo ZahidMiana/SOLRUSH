@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TokenSelect } from '@/components/ui/token-select';
 import { ArrowUpDown } from 'lucide-react';
-import { useSwap } from '@/lib/hooks/useSwap';
+import { useSwap, SwapErrorType } from '@/lib/hooks/useSwap';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -18,14 +18,15 @@ interface SwapTabProps {
 export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
     const { publicKey } = useWallet();
     const { toast } = useToast();
-    const { calculateQuote, executeSwap, loading } = useSwap();
+    const { calculateQuoteSync, calculateQuote, executeSwap, refreshPoolReserves, loading, error } = useSwap();
 
     const [inputAmount, setInputAmount] = useState('');
     const [outputAmount, setOutputAmount] = useState('');
     const [inputToken, setInputToken] = useState('SOL');
     const [outputToken, setOutputToken] = useState('USDC');
 
-    const currentQuote = calculateQuote(
+    // Use synchronous quote for immediate UI updates
+    const currentQuote = calculateQuoteSync(
         parseFloat(inputAmount) || 0,
         inputToken,
         outputToken,
@@ -36,23 +37,39 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
         onTokenChange?.(inputToken, outputToken);
     }, [inputToken, outputToken, onTokenChange]);
 
+    // Update output amount and fetch real pool data when inputs change
     useEffect(() => {
         if (inputAmount && parseFloat(inputAmount) > 0) {
-            try {
-                const quote = calculateQuote(
-                    parseFloat(inputAmount),
-                    inputToken,
-                    outputToken,
-                    slippageTolerance
-                );
-                setOutputAmount(quote.outputAmount.toFixed(6));
-            } catch (error) {
-                console.error('Quote calculation error:', error);
-            }
+            // Use sync quote for immediate UI feedback
+            const quote = calculateQuoteSync(
+                parseFloat(inputAmount),
+                inputToken,
+                outputToken,
+                slippageTolerance
+            );
+            setOutputAmount(quote.outputAmount.toFixed(6));
+            
+            // Also fetch real pool data in background (async)
+            calculateQuote(
+                parseFloat(inputAmount),
+                inputToken,
+                outputToken,
+                slippageTolerance
+            ).then((asyncQuote) => {
+                // Update if the async quote differs significantly
+                if (Math.abs(asyncQuote.outputAmount - quote.outputAmount) > 0.000001) {
+                    setOutputAmount(asyncQuote.outputAmount.toFixed(6));
+                }
+            }).catch(console.error);
         } else {
             setOutputAmount('');
         }
-    }, [inputAmount, inputToken, outputToken, slippageTolerance, calculateQuote]);
+    }, [inputAmount, inputToken, outputToken, slippageTolerance, calculateQuoteSync, calculateQuote]);
+
+    // Refresh pool data when tokens change
+    useEffect(() => {
+        refreshPoolReserves(inputToken, outputToken).catch(console.error);
+    }, [inputToken, outputToken, refreshPoolReserves]);
 
     const handleSwitchTokens = () => {
         setInputToken(outputToken);
@@ -79,7 +96,8 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
         }
 
         try {
-            const quote = calculateQuote(
+            // Get fresh quote before executing
+            const quote = await calculateQuote(
                 parseFloat(inputAmount),
                 inputToken,
                 outputToken,
@@ -100,16 +118,44 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
 
             setInputAmount('');
             setOutputAmount('');
-        } catch (error: any) {
+            
+            // Refresh pool reserves after swap
+            refreshPoolReserves(inputToken, outputToken).catch(console.error);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Transaction failed. Please try again.';
             toast({
                 title: 'Swap Failed',
-                description: error.message || 'Transaction failed. Please try again.',
+                description: errorMessage,
             });
         }
     };
 
+    // Show error feedback if there's a swap error
+    const getErrorMessage = () => {
+        if (!error) return null;
+        switch (error.type) {
+            case SwapErrorType.INSUFFICIENT_FUNDS:
+                return 'Insufficient balance';
+            case SwapErrorType.SLIPPAGE_EXCEEDED:
+                return 'Slippage exceeded - try increasing tolerance';
+            case SwapErrorType.INSUFFICIENT_LIQUIDITY:
+                return 'Insufficient pool liquidity';
+            default:
+                return null;
+        }
+    };
+
+    const errorMessage = getErrorMessage();
+
     return (
         <div className="space-y-4">
+            {/* Error Banner */}
+            {errorMessage && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-200">
+                    {errorMessage}
+                </div>
+            )}
+
             {/* Input Section */}
             <div className="bg-black/20 rounded-2xl p-4 border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex justify-between mb-2">

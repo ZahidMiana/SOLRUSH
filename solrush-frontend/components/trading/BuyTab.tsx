@@ -16,7 +16,7 @@ interface BuyTabProps {
 export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
     const { publicKey } = useWallet();
     const { toast } = useToast();
-    const { calculateQuote, executeSwap, loading } = useSwap();
+    const { calculateQuoteSync, calculateQuote, executeSwap, refreshPoolReserves, loading } = useSwap();
 
     const [buyAmount, setBuyAmount] = useState('');
     const [buyTokenSpend, setBuyTokenSpend] = useState('USDC');
@@ -29,21 +29,35 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
 
     useEffect(() => {
         if (buyAmount && parseFloat(buyAmount) > 0) {
-            try {
-                const quote = calculateQuote(
-                    parseFloat(buyAmount),
-                    buyTokenSpend,
-                    buyTokenReceive,
-                    slippageTolerance
-                );
-                setBuyEstimatedAmount(quote.outputAmount.toFixed(6));
-            } catch (error) {
-                console.error('Buy quote error:', error);
-            }
+            // Use sync quote for immediate UI feedback
+            const quote = calculateQuoteSync(
+                parseFloat(buyAmount),
+                buyTokenSpend,
+                buyTokenReceive,
+                slippageTolerance
+            );
+            setBuyEstimatedAmount(quote.outputAmount.toFixed(6));
+            
+            // Also fetch real pool data in background
+            calculateQuote(
+                parseFloat(buyAmount),
+                buyTokenSpend,
+                buyTokenReceive,
+                slippageTolerance
+            ).then((asyncQuote) => {
+                if (Math.abs(asyncQuote.outputAmount - quote.outputAmount) > 0.000001) {
+                    setBuyEstimatedAmount(asyncQuote.outputAmount.toFixed(6));
+                }
+            }).catch(console.error);
         } else {
             setBuyEstimatedAmount('');
         }
-    }, [buyAmount, buyTokenSpend, buyTokenReceive, slippageTolerance, calculateQuote]);
+    }, [buyAmount, buyTokenSpend, buyTokenReceive, slippageTolerance, calculateQuoteSync, calculateQuote]);
+
+    // Refresh pool data when tokens change
+    useEffect(() => {
+        refreshPoolReserves(buyTokenSpend, buyTokenReceive).catch(console.error);
+    }, [buyTokenSpend, buyTokenReceive, refreshPoolReserves]);
 
     const handleBuy = async () => {
         if (!publicKey) {
@@ -55,7 +69,7 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
         }
 
         try {
-            const quote = calculateQuote(
+            const quote = await calculateQuote(
                 parseFloat(buyAmount),
                 buyTokenSpend,
                 buyTokenReceive,
@@ -76,10 +90,13 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
 
             setBuyAmount('');
             setBuyEstimatedAmount('');
-        } catch (error: any) {
+            
+            refreshPoolReserves(buyTokenSpend, buyTokenReceive).catch(console.error);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Transaction failed.';
             toast({
                 title: 'Purchase Failed',
-                description: error.message || 'Transaction failed.',
+                description: errorMessage,
             });
         }
     };

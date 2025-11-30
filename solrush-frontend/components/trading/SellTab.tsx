@@ -16,7 +16,7 @@ interface SellTabProps {
 export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
     const { publicKey } = useWallet();
     const { toast } = useToast();
-    const { calculateQuote, executeSwap, loading } = useSwap();
+    const { calculateQuoteSync, calculateQuote, executeSwap, refreshPoolReserves, loading } = useSwap();
 
     const [sellAmount, setSellAmount] = useState('');
     const [sellToken, setSellToken] = useState('SOL');
@@ -29,21 +29,35 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
 
     useEffect(() => {
         if (sellAmount && parseFloat(sellAmount) > 0) {
-            try {
-                const quote = calculateQuote(
-                    parseFloat(sellAmount),
-                    sellToken,
-                    sellTokenReceive,
-                    slippageTolerance
-                );
-                setSellEstimatedAmount(quote.outputAmount.toFixed(6));
-            } catch (error) {
-                console.error('Sell quote error:', error);
-            }
+            // Use sync quote for immediate UI feedback
+            const quote = calculateQuoteSync(
+                parseFloat(sellAmount),
+                sellToken,
+                sellTokenReceive,
+                slippageTolerance
+            );
+            setSellEstimatedAmount(quote.outputAmount.toFixed(6));
+            
+            // Also fetch real pool data in background
+            calculateQuote(
+                parseFloat(sellAmount),
+                sellToken,
+                sellTokenReceive,
+                slippageTolerance
+            ).then((asyncQuote) => {
+                if (Math.abs(asyncQuote.outputAmount - quote.outputAmount) > 0.000001) {
+                    setSellEstimatedAmount(asyncQuote.outputAmount.toFixed(6));
+                }
+            }).catch(console.error);
         } else {
             setSellEstimatedAmount('');
         }
-    }, [sellAmount, sellToken, sellTokenReceive, slippageTolerance, calculateQuote]);
+    }, [sellAmount, sellToken, sellTokenReceive, slippageTolerance, calculateQuoteSync, calculateQuote]);
+
+    // Refresh pool data when tokens change
+    useEffect(() => {
+        refreshPoolReserves(sellToken, sellTokenReceive).catch(console.error);
+    }, [sellToken, sellTokenReceive, refreshPoolReserves]);
 
     const handleSell = async () => {
         if (!publicKey) {
@@ -55,7 +69,7 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
         }
 
         try {
-            const quote = calculateQuote(
+            const quote = await calculateQuote(
                 parseFloat(sellAmount),
                 sellToken,
                 sellTokenReceive,
@@ -76,10 +90,13 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
 
             setSellAmount('');
             setSellEstimatedAmount('');
-        } catch (error: any) {
+            
+            refreshPoolReserves(sellToken, sellTokenReceive).catch(console.error);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Transaction failed.';
             toast({
                 title: 'Sale Failed',
-                description: error.message || 'Transaction failed.',
+                description: errorMessage,
             });
         }
     };
