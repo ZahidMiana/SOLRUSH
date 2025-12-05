@@ -23,6 +23,13 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
     const [sellTokenReceive, setSellTokenReceive] = useState('USDC');
     const [sellEstimatedAmount, setSellEstimatedAmount] = useState('');
 
+    // Balance tracking
+    const [balances, setBalances] = useState({
+        SOL: 10.5,
+        USDC: 1000,
+        USDT: 500,
+    });
+
     useEffect(() => {
         onTokenChange?.(sellToken, sellTokenReceive);
     }, [sellToken, sellTokenReceive, onTokenChange]);
@@ -54,9 +61,21 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
             return;
         }
 
+        const sellAmountNum = parseFloat(sellAmount);
+        const receiveAmountNum = parseFloat(sellEstimatedAmount);
+
+        // Check balance
+        if (balances[sellToken as keyof typeof balances] < sellAmountNum) {
+            toast({
+                title: 'Insufficient Balance',
+                description: `You don't have enough ${sellToken}.`,
+            });
+            return;
+        }
+
         try {
             const quote = calculateQuote(
-                parseFloat(sellAmount),
+                sellAmountNum,
                 sellToken,
                 sellTokenReceive,
                 slippageTolerance
@@ -65,13 +84,20 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
             const signature = await executeSwap({
                 inputToken: sellToken,
                 outputToken: sellTokenReceive,
-                inputAmount: parseFloat(sellAmount),
+                inputAmount: sellAmountNum,
                 minOutputAmount: quote.minReceived,
             });
 
+            // Update balances
+            setBalances(prev => ({
+                ...prev,
+                [sellToken]: prev[sellToken as keyof typeof prev] - sellAmountNum,
+                [sellTokenReceive]: prev[sellTokenReceive as keyof typeof prev] + receiveAmountNum,
+            }));
+
             toast({
                 title: 'Sale Successful!',
-                description: `Sold ${sellAmount} ${sellToken} for ${sellEstimatedAmount} ${sellTokenReceive}. TX: ${signature.slice(0, 8)}...`,
+                description: `Sold ${sellAmount} ${sellToken} for ${sellEstimatedAmount} ${sellTokenReceive}`,
             });
 
             setSellAmount('');
@@ -94,9 +120,9 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
                             Sell
                         </label>
                         <div className="flex items-center gap-2 text-xs text-white/40">
-                            <span>Balance: 10.5 {sellToken}</span>
+                            <span>Balance: {balances[sellToken as keyof typeof balances].toFixed(2)} {sellToken}</span>
                             <button
-                                onClick={() => setSellAmount('10.5')}
+                                onClick={() => setSellAmount(balances[sellToken as keyof typeof balances].toString())}
                                 className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
                             >
                                 Max
@@ -139,7 +165,7 @@ export function SellTab({ slippageTolerance, onTokenChange }: SellTabProps) {
                             Receive
                         </label>
                         <div className="text-xs text-white/40">
-                            Balance: 1000 {sellTokenReceive}
+                            Balance: {balances[sellTokenReceive as keyof typeof balances].toFixed(2)} {sellTokenReceive}
                         </div>
                     </div>
                     <div className="flex items-center gap-4">

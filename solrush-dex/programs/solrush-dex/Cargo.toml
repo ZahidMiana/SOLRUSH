@@ -21,9 +21,13 @@ init-if-needed = ["anchor-lang/init-if-needed"]
 
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
-anchor-spl = "0.31.1"
+anchor-spl = { version = "0.31.1", features = ["idl-build"] }
 spl-token = "~5"
 spl-associated-token-account = "~1"
-pyth-sdk-solana = "0.7"
+
+# Fix for Solana BPF compilation - getrandom doesn't support BPF target
+# Adding with dummy feature allows compilation but runtime calls will fail
+# This is acceptable since on-chain programs should not use random numbers
+getrandom = { version = "0.1", features = ["dummy"] }
 
 

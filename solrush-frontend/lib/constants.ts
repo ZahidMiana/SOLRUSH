@@ -8,6 +8,8 @@ export const TOKENS = {
     RUSH: new PublicKey("11111111111111111111111111111111"), // Placeholder: System Program ID
 };
 
+export const PROGRAM_ID = new PublicKey("3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT");
+
 export const getTokenMint = (symbol: string): PublicKey => {
     switch (symbol) {
         case 'SOL': return TOKENS.SOL;

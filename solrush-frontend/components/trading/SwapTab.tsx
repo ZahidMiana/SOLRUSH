@@ -25,6 +25,13 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
     const [inputToken, setInputToken] = useState('SOL');
     const [outputToken, setOutputToken] = useState('USDC');
 
+    // Mock balances that update after swaps
+    const [balances, setBalances] = useState({
+        SOL: 10.5,
+        USDC: 1000,
+        USDT: 500,
+    });
+
     const currentQuote = calculateQuote(
         parseFloat(inputAmount) || 0,
         inputToken,
@@ -78,9 +85,21 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
             return;
         }
 
+        const inputAmountNum = parseFloat(inputAmount);
+        const outputAmountNum = parseFloat(outputAmount);
+
+        // Check if user has enough balance
+        if (balances[inputToken as keyof typeof balances] < inputAmountNum) {
+            toast({
+                title: 'Insufficient Balance',
+                description: `You don't have enough ${inputToken}.`,
+            });
+            return;
+        }
+
         try {
             const quote = calculateQuote(
-                parseFloat(inputAmount),
+                inputAmountNum,
                 inputToken,
                 outputToken,
                 slippageTolerance
@@ -89,13 +108,20 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
             const signature = await executeSwap({
                 inputToken,
                 outputToken,
-                inputAmount: parseFloat(inputAmount),
+                inputAmount: inputAmountNum,
                 minOutputAmount: quote.minReceived,
             });
 
+            // Update balances after successful swap
+            setBalances(prev => ({
+                ...prev,
+                [inputToken]: prev[inputToken as keyof typeof prev] - inputAmountNum,
+                [outputToken]: prev[outputToken as keyof typeof prev] + outputAmountNum,
+            }));
+
             toast({
                 title: 'Swap Successful!',
-                description: `Swapped ${inputAmount} ${inputToken} for ${outputAmount} ${outputToken}. TX: ${signature.slice(0, 8)}...`,
+                description: `Swapped ${inputAmount} ${inputToken} for ${outputAmount} ${outputToken}`,
             });
 
             setInputAmount('');
@@ -117,9 +143,9 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
                         You Pay
                     </label>
                     <div className="flex items-center gap-2 text-xs text-white/40">
-                        <span>Balance: 10.5 {inputToken}</span>
+                        <span>Balance: {balances[inputToken as keyof typeof balances].toFixed(2)} {inputToken}</span>
                         <button
-                            onClick={() => setInputAmount('10.5')}
+                            onClick={() => setInputAmount(balances[inputToken as keyof typeof balances].toString())}
                             className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
                         >
                             Max
@@ -167,7 +193,7 @@ export function SwapTab({ slippageTolerance, onTokenChange }: SwapTabProps) {
                         You Receive
                     </label>
                     <div className="text-xs text-white/40">
-                        Balance: 1000 {outputToken}
+                        Balance: {balances[outputToken as keyof typeof balances].toFixed(2)} {outputToken}
                     </div>
                 </div>
                 <div className="flex items-center gap-4">

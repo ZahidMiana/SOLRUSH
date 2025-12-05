@@ -23,6 +23,13 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
     const [buyTokenReceive, setBuyTokenReceive] = useState('SOL');
     const [buyEstimatedAmount, setBuyEstimatedAmount] = useState('');
 
+    // Balance tracking
+    const [balances, setBalances] = useState({
+        SOL: 10.5,
+        USDC: 1000,
+        USDT: 500,
+    });
+
     useEffect(() => {
         onTokenChange?.(buyTokenSpend, buyTokenReceive);
     }, [buyTokenSpend, buyTokenReceive, onTokenChange]);
@@ -54,9 +61,21 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
             return;
         }
 
+        const buyAmountNum = parseFloat(buyAmount);
+        const receiveAmountNum = parseFloat(buyEstimatedAmount);
+
+        // Check balance
+        if (balances[buyTokenSpend as keyof typeof balances] < buyAmountNum) {
+            toast({
+                title: 'Insufficient Balance',
+                description: `You don't have enough ${buyTokenSpend}.`,
+            });
+            return;
+        }
+
         try {
             const quote = calculateQuote(
-                parseFloat(buyAmount),
+                buyAmountNum,
                 buyTokenSpend,
                 buyTokenReceive,
                 slippageTolerance
@@ -65,13 +84,20 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
             const signature = await executeSwap({
                 inputToken: buyTokenSpend,
                 outputToken: buyTokenReceive,
-                inputAmount: parseFloat(buyAmount),
+                inputAmount: buyAmountNum,
                 minOutputAmount: quote.minReceived,
             });
 
+            // Update balances
+            setBalances(prev => ({
+                ...prev,
+                [buyTokenSpend]: prev[buyTokenSpend as keyof typeof prev] - buyAmountNum,
+                [buyTokenReceive]: prev[buyTokenReceive as keyof typeof prev] + receiveAmountNum,
+            }));
+
             toast({
                 title: 'Purchase Successful!',
-                description: `Bought ${buyEstimatedAmount} ${buyTokenReceive} for ${buyAmount} ${buyTokenSpend}. TX: ${signature.slice(0, 8)}...`,
+                description: `Bought ${buyEstimatedAmount} ${buyTokenReceive} for ${buyAmount} ${buyTokenSpend}`,
             });
 
             setBuyAmount('');
@@ -94,9 +120,9 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
                             Spend
                         </label>
                         <div className="flex items-center gap-2 text-xs text-white/40">
-                            <span>Balance: 250 {buyTokenSpend}</span>
+                            <span>Balance: {balances[buyTokenSpend as keyof typeof balances].toFixed(2)} {buyTokenSpend}</span>
                             <button
-                                onClick={() => setBuyAmount('250')}
+                                onClick={() => setBuyAmount(balances[buyTokenSpend as keyof typeof balances].toString())}
                                 className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
                             >
                                 Max
@@ -139,7 +165,7 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
                             Receive
                         </label>
                         <div className="text-xs text-white/40">
-                            Balance: 2.5 {buyTokenReceive}
+                            Balance: {balances[buyTokenReceive as keyof typeof balances].toFixed(2)} {buyTokenReceive}
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -188,7 +214,7 @@ export function BuyTab({ slippageTolerance, onTokenChange }: BuyTabProps) {
                 <Button
                     onClick={handleBuy}
                     disabled={!publicKey || loading || !buyAmount}
-                    className="w-full h-14 text-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                    className="w-full h-14 text-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold rounded-xl shadow-lg shadow-green-500/20 transition-all"
                     size="lg"
                 >
                     {!publicKey ? 'Connect Wallet' : loading ? 'Buying...' : `Buy ${buyTokenReceive}`}

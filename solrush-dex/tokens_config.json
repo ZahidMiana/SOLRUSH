@@ -1,0 +1,36 @@
+{
+  "network": "devnet",
+  "tokens": {
+    "USDC": {
+      "mint": "7awnAQezfgS6WWJUiG12mLsnnxRBkquXTjrCFhSjoj35",
+      "decimals": 6,
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "initialSupply": 1000000
+    },
+    "USDT": {
+      "mint": "9CHrRN1codejuANpgBEq2QEuhBAjpBBMtFWXMhDiADDn",
+      "decimals": 6,
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "initialSupply": 1000000
+    },
+    "SOL": {
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9,
+      "symbol": "SOL",
+      "name": "Solana"
+    },
+    "RUSH": {
+      "mint": "GqXCfSZk8kuuzhHpinY5sn19sMYfTkMw5svRfTcYDJ6k",
+      "decimals": 6,
+      "symbol": "RUSH",
+      "name": "RUSH Token"
+    }
+  },
+  "walletAccounts": {
+    "usdc": "27uhU3DnaVDaBwg4qU53G8sSUwMz2eKjchErAZGeKWgz",
+    "usdt": "31xqzoGqs1s9MaHMPLYKUtp321stxJ4XcyzUR2vktyzP"
+  },
+  "createdAt": "2025-12-05T12:17:55.846Z"
+}

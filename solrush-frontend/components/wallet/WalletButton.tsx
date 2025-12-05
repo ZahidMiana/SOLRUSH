@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,11 @@ import { useToast } from '@/components/ui/use-toast';
 export function WalletButton() {
   const { publicKey, disconnect } = useWallet();
   const { toast } = useToast();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleCopyAddress = () => {
     if (publicKey) {
@@ -34,6 +40,16 @@ export function WalletButton() {
       );
     }
   };
+
+  // Prevent hydration mismatch by only rendering after mount
+  if (!mounted) {
+    return (
+      <Button variant="outline" className="gap-2" disabled>
+        <Wallet className="h-4 w-4" />
+        Loading...
+      </Button>
+    );
+  }
 
   if (!publicKey) {
     return (

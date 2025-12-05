@@ -46,7 +46,7 @@ export default function SwapPage() {
           </div>
 
           {/* Two-column layout - Chart first (left), Swap second (right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8 items-start">
             {/* Trading Chart - Left Side */}
             <div className="w-full lg:order-1">
               {isMounted ? (
@@ -56,7 +56,7 @@ export default function SwapPage() {
                   outputToken={selectedOutputToken}
                 />
               ) : (
-                <div className="w-full h-[400px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 shadow-xl flex items-center justify-center">
+                <div className="w-full h-[550px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 shadow-xl flex items-center justify-center">
                   <div className="text-white/30">Loading chart...</div>
                 </div>
               )}

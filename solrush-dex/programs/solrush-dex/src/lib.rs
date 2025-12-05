@@ -13,10 +13,10 @@ pub use errors::*;
 pub use events::*;
 pub use instructions::*;
 
-declare_id!("3jRmy5gMAQLFxb2mD3Gi4p9N9VuwLXp9toaqEhi1QSRT");
+declare_id!("5AtAVriL32asiRrkSXCLwkYy6E9DefEt6wdtVQVR9CvX");
 
 // ============================================================================
-// PROGRAM MODULE
+// SOLRUSH DEX - Decentralized Exchange on Solana
 // ============================================================================
 
 #[program]

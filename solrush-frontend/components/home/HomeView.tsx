@@ -13,6 +13,12 @@ interface HomeViewProps {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ publicKey, handleLaunchApp }) => {
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
+
     return (
         <div className="min-h-screen bg-black relative overflow-hidden selection:bg-purple-500/30">
             {/* Navbar */}
@@ -59,7 +65,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ publicKey, handleLaunchApp }
                             <div className="pt-8">
                                 <p className="text-white/40 text-sm mb-4">Connect your wallet to get started</p>
                                 <div className="flex justify-center">
-                                    <WalletMultiButton className="!bg-[#512da8] hover:!bg-[#4527a0] !h-12 !rounded-xl !font-bold" />
+                                    {mounted ? (
+                                        <WalletMultiButton className="!bg-[#512da8] hover:!bg-[#4527a0] !h-12 !rounded-xl !font-bold" />
+                                    ) : (
+                                        <div className="h-12 w-40 bg-[#512da8] rounded-xl animate-pulse" />
+                                    )}
                                 </div>
                             </div>
                         )}

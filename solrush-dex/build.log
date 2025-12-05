@@ -1,0 +1,20 @@
+[2025-12-04T09:50:53.799956393Z ERROR cargo_build_sbf] Failed to obtain package metadata: `cargo metadata` exited with an error:     Updating git repository `https://github.com/solana-labs/getrandom`
+    error: failed to load source for dependency `getrandom`
+    
+    Caused by:
+      Unable to update https://github.com/solana-labs/getrandom?branch=solana
+    
+    Caused by:
+      failed to clone into: /home/zahidi/.cargo/git/db/getrandom-1853638b72f858b1
+    
+    Caused by:
+      failed to authenticate when downloading repository
+    
+      * attempted to find username/password via git's `credential.helper` support, but failed
+    
+      if the git CLI succeeds then `net.git-fetch-with-cli` may help here
+      https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+    
+    Caused by:
+      failed to acquire username/password from local configuration
+    

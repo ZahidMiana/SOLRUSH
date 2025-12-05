@@ -393,10 +393,10 @@ pub struct InitializePool<'info> {
         seeds = [b"pool", token_a_mint.key().as_ref(), token_b_mint.key().as_ref()],
         bump
     )]
-    pub pool: Account<'info, LiquidityPool>,
+    pub pool: Box<Account<'info, LiquidityPool>>,
     
-    pub token_a_mint: Account<'info, Mint>,
-    pub token_b_mint: Account<'info, Mint>,
+    pub token_a_mint: Box<Account<'info, Mint>>,
+    pub token_b_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init,
@@ -406,7 +406,7 @@ pub struct InitializePool<'info> {
         seeds = [b"lp_mint", pool.key().as_ref()],
         bump
     )]
-    pub lp_token_mint: Account<'info, Mint>,
+    pub lp_token_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init,
@@ -414,7 +414,7 @@ pub struct InitializePool<'info> {
         token::mint = token_a_mint,
         token::authority = pool
     )]
-    pub token_a_vault: Account<'info, TokenAccount>,
+    pub token_a_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         init,
@@ -422,21 +422,13 @@ pub struct InitializePool<'info> {
         token::mint = token_b_mint,
         token::authority = pool
     )]
-    pub token_b_vault: Account<'info, TokenAccount>,
+    pub token_b_vault: Box<Account<'info, TokenAccount>>,
     
-    #[account(
-        mut,
-        token::mint = token_a_mint,
-        token::authority = authority
-    )]
-    pub user_token_a: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_token_a: Box<Account<'info, TokenAccount>>,
     
-    #[account(
-        mut,
-        token::mint = token_b_mint,
-        token::authority = authority
-    )]
-    pub user_token_b: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_token_b: Box<Account<'info, TokenAccount>>,
     
     #[account(
         init,
@@ -444,7 +436,7 @@ pub struct InitializePool<'info> {
         associated_token::mint = lp_token_mint,
         associated_token::authority = authority
     )]
-    pub lp_token_account: Account<'info, TokenAccount>,
+    pub lp_token_account: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -456,11 +448,18 @@ pub struct InitializePool<'info> {
 
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
-    #[account(mut)]
-    pub pool: Account<'info, LiquidityPool>,
+    #[account(
+        mut,
+        seeds = [b"pool", token_a_mint.key().as_ref(), token_b_mint.key().as_ref()],
+        bump
+    )]
+    pub pool: Box<Account<'info, LiquidityPool>>,
+    
+    pub token_a_mint: Box<Account<'info, Mint>>,
+    pub token_b_mint: Box<Account<'info, Mint>>,
     
     #[account(mut)]
-    pub lp_token_mint: Account<'info, Mint>,
+    pub lp_token_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init_if_needed,
@@ -469,37 +468,39 @@ pub struct AddLiquidity<'info> {
         seeds = [b"position", pool.key().as_ref(), user.key().as_ref()],
         bump
     )]
-    pub user_position: Account<'info, UserLiquidityPosition>,
+    pub user_position: Box<Account<'info, UserLiquidityPosition>>,
     
     #[account(mut)]
-    pub token_a_vault: Account<'info, TokenAccount>,
+    pub token_a_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub token_b_vault: Account<'info, TokenAccount>,
+    pub token_b_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
-        token::mint = token_a_vault.mint,
+        token::mint = token_a_mint,
         token::authority = user
     )]
-    pub user_token_a: Account<'info, TokenAccount>,
+    pub user_token_a: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
-        token::mint = token_b_vault.mint,
+        token::mint = token_b_mint,
         token::authority = user
     )]
-    pub user_token_b: Account<'info, TokenAccount>,
+    pub user_token_b: Box<Account<'info, TokenAccount>>,
     
     #[account(
-        mut,
-        token::mint = lp_token_mint,
-        token::authority = user
+        init_if_needed,
+        payer = user,
+        associated_token::mint = lp_token_mint,
+        associated_token::authority = user
     )]
-    pub user_lp_token_account: Account<'info, TokenAccount>,
+    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
     pub user: Signer<'info>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -508,44 +509,44 @@ pub struct AddLiquidity<'info> {
 #[derive(Accounts)]
 pub struct RemoveLiquidity<'info> {
     #[account(mut)]
-    pub pool: Account<'info, LiquidityPool>,
+    pub pool: Box<Account<'info, LiquidityPool>>,
     
     #[account(mut)]
-    pub lp_token_mint: Account<'info, Mint>,
+    pub lp_token_mint: Box<Account<'info, Mint>>,
     
     #[account(
         mut,
         seeds = [b"position", pool.key().as_ref(), user.key().as_ref()],
         bump
     )]
-    pub user_position: Account<'info, UserLiquidityPosition>,
+    pub user_position: Box<Account<'info, UserLiquidityPosition>>,
     
     #[account(mut)]
-    pub token_a_vault: Account<'info, TokenAccount>,
+    pub token_a_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub token_b_vault: Account<'info, TokenAccount>,
+    pub token_b_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = lp_token_mint,
         token::authority = user
     )]
-    pub user_lp_token_account: Account<'info, TokenAccount>,
+    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token_a_vault.mint,
         token::authority = user
     )]
-    pub user_token_a: Account<'info, TokenAccount>,
+    pub user_token_a: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token_b_vault.mint,
         token::authority = user
     )]
-    pub user_token_b: Account<'info, TokenAccount>,
+    pub user_token_b: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
     pub user: Signer<'info>,

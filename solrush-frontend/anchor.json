@@ -213,52 +213,55 @@
   "accounts": [
     {
       "name": "LiquidityPool",
-      "fields": [
-        {
-          "name": "authority",
-          "type": "publicKey"
-        },
-        {
-          "name": "tokenAMint",
-          "type": "publicKey"
-        },
-        {
-          "name": "tokenBMint",
-          "type": "publicKey"
-        },
-        {
-          "name": "tokenAVault",
-          "type": "publicKey"
-        },
-        {
-          "name": "tokenBVault",
-          "type": "publicKey"
-        },
-        {
-          "name": "poolMint",
-          "type": "publicKey"
-        },
-        {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "feeBasisPoints",
-          "type": "u16"
-        },
-        {
-          "name": "tokenAReserve",
-          "type": "u64"
-        },
-        {
-          "name": "tokenBReserve",
-          "type": "u64"
-        },
-        {
-          "name": "bump",
-          "type": "u8"
-        }
-      ]
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenAMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenBMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenAVault",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenBVault",
+            "type": "publicKey"
+          },
+          {
+            "name": "poolMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "feeBasisPoints",
+            "type": "u16"
+          },
+          {
+            "name": "tokenAReserve",
+            "type": "u64"
+          },
+          {
+            "name": "tokenBReserve",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
     }
   ],
   "types": [

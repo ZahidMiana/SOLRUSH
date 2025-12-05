@@ -1,13 +1,30 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { PROGRAM_ID } from "./constants";
+import { Program, AnchorProvider, Idl, setProvider } from "@project-serum/anchor";
+import { PROGRAM_ID } from "../anchor/setup";
+import idl from "../../anchor.json";
 
-// Anchor program instance stub
-// Full implementation requires Anchor library at runtime
-let program: any = null;
+// Anchor program instance
+let program: Program | null = null;
 
-export const getProgram = (connection: Connection): any => {
-  // TODO: Initialize Anchor program when connection is ready
-  // This will be implemented during the contract interaction phase
+export const getProgram = (connection: Connection, wallet: any): Program => {
+  if (program) return program;
+
+  if (!wallet) {
+    throw new Error("Wallet not connected");
+  }
+
+  const provider = new AnchorProvider(
+    connection,
+    wallet,
+    AnchorProvider.defaultOptions()
+  );
+
+  // Set the provider as default
+  setProvider(provider);
+
+  // Initialize the program
+  program = new Program(idl as Idl, PROGRAM_ID, provider);
+
   return program;
 };
 
@@ -18,8 +35,6 @@ export const resetProgram = () => {
 export const initializeProgram = async (
   connection: Connection,
   wallet: any
-): Promise<any> => {
-  // This function will initialize the Anchor program at runtime
-  // Called when wallet is connected and ready
-  return program;
+): Promise<Program> => {
+  return getProgram(connection, wallet);
 };
